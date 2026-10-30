@@ -1,0 +1,114 @@
+# One command: docker compose up --build
+#   postgres + redis + 3 gateway nodes + nginx.   Entry point: http://localhost:8080  (ws://localhost:8080/ws/updates)
+#   Per-node metrics/health: http://localhost:8091|8092|8093/actuator/prometheus
+#
+# Load test data: SEED_LOAD_CABS=2000 docker compose up --build   (see loadtest/README.md)
+x-gateway: &gateway
+  build: .
+  restart: "no"
+  environment: &gateway-env
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/trip_updates_db
+    SPRING_DATASOURCE_USERNAME: trip_user
+    SPRING_DATASOURCE_PASSWORD: trip_password
+    SPRING_DATA_REDIS_HOST: redis
+    SPRING_DATA_REDIS_PORT: 6379
+    JWT_SECRET: ${JWT_SECRET:-local-demo-secret-change-me-local-demo-secret-change-me}
+    SEED_LOAD_CABS: ${SEED_LOAD_CABS:-0}
+    MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,prometheus,metrics,threaddump
+    JAVA_OPTS: ${GATEWAY_JAVA_OPTS:--Xms256m -Xmx512m -XX:+UseG1GC}
+  depends_on: &gateway-deps
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep -q UP"]
+    interval: 5s
+    timeout: 3s
+    retries: 30
+    start_period: 20s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trip_user
+      POSTGRES_PASSWORD: trip_password
+      POSTGRES_DB: trip_updates_db
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trip_user -d trip_updates_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "volatile-ttl"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # gateway-1 creates the schema and seed data first; the others start once it is healthy
+  gateway-1:
+    <<: *gateway
+    container_name: trip-gateway-1
+    environment:
+      <<: *gateway-env
+      NODE_ID: gateway-1
+    ports:
+      - "8091:8081"
+
+  gateway-2:
+    <<: *gateway
+    container_name: trip-gateway-2
+    environment:
+      <<: *gateway-env
+      NODE_ID: gateway-2
+    depends_on:
+      <<: *gateway-deps
+      gateway-1:
+        condition: service_healthy
+    ports:
+      - "8092:8081"
+
+  gateway-3:
+    <<: *gateway
+    container_name: trip-gateway-3
+    environment:
+      <<: *gateway-env
+      NODE_ID: gateway-3
+    depends_on:
+      <<: *gateway-deps
+      gateway-1:
+        condition: service_healthy
+    ports:
+      - "8093:8081"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: trip-nginx
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${ENTRY_PORT:-8080}:80"
+    depends_on:
+      gateway-1:
+        condition: service_healthy
+      gateway-2:
+        condition: service_healthy
+      gateway-3:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
