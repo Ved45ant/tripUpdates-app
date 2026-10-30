@@ -1,0 +1,281 @@
+{
+  "info": {
+    "name": "Trip Updates",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "HTTP side of the demo. WebSocket: use demo/WsClient.java or Postman's WebSocket request to ws://localhost:8080/ws/updates?token={{operatorToken}} and send {\"action\":\"RESUME\",\"topic\":\"trip:{{tripId}}\",\"lastSeq\":0}."
+  },
+  "variable": [
+    {
+      "key": "base",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "operatorId",
+      "value": "12345678-1234-1234-1234-123456789017"
+    },
+    {
+      "key": "cabId",
+      "value": "12345678-1234-1234-1234-123456789014"
+    },
+    {
+      "key": "tripId",
+      "value": "12345678-1234-1234-1234-123456789018"
+    },
+    {
+      "key": "operatorToken",
+      "value": ""
+    },
+    {
+      "key": "cabToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login (security operator)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{operatorId}}\",\n  \"password\": \"password123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200',()=>pm.response.to.have.status(200));pm.collectionVariables.set('operatorToken',pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Mint cab token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/auth/cab-token",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{operatorToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cabId\": \"{{cabId}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200',()=>pm.response.to.have.status(200));pm.collectionVariables.set('cabToken',pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Post STATUS",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/events/status",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{cabToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventType\": \"STATUS\",\n  \"eventId\": \"status-{{$guid}}\",\n  \"cabId\": \"{{cabId}}\",\n  \"tripId\": \"{{tripId}}\",\n  \"timestamp\": \"{{$timestamp}}000\",\n  \"payload\": {\n    \"status\": \"ACTIVE\",\n    \"reason\": \"pickup\"\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202',()=>pm.response.to.have.status(202));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Post LOCATION",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/events/location",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{cabToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventType\": \"LOCATION\",\n  \"eventId\": \"loc-{{$guid}}\",\n  \"cabId\": \"{{cabId}}\",\n  \"tripId\": \"{{tripId}}\",\n  \"timestamp\": \"{{$timestamp}}000\",\n  \"payload\": {\n    \"lat\": 12.97,\n    \"lng\": 77.59\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202',()=>pm.response.to.have.status(202));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Post SOS",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/events/sos",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{cabToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventType\": \"SOS\",\n  \"eventId\": \"sos-{{$guid}}\",\n  \"cabId\": \"{{cabId}}\",\n  \"tripId\": \"{{tripId}}\",\n  \"timestamp\": \"{{$timestamp}}000\",\n  \"payload\": {\n    \"level\": \"HIGH\",\n    \"message\": \"help\",\n    \"lat\": 12.9,\n    \"lng\": 77.5\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202',()=>pm.response.to.have.status(202));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Ingest without token -> rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/events/status",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventType\": \"STATUS\",\n  \"eventId\": \"x-{{$guid}}\",\n  \"cabId\": \"{{cabId}}\",\n  \"tripId\": \"{{tripId}}\",\n  \"timestamp\": \"{{$timestamp}}000\",\n  \"payload\": {\n    \"status\": \"ACTIVE\"\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401/403',()=>pm.expect([401,403]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Ingest with a user token (not a cab) -> rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base}}/api/v1/events/status",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{operatorToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventType\": \"STATUS\",\n  \"eventId\": \"y-{{$guid}}\",\n  \"cabId\": \"{{cabId}}\",\n  \"tripId\": \"{{tripId}}\",\n  \"timestamp\": \"{{$timestamp}}000\",\n  \"payload\": {\n    \"status\": \"ACTIVE\"\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401/403',()=>pm.expect([401,403]).to.include(pm.response.code));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
