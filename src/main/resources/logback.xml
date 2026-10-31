@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured JSON logs, one object per line, on stdout (collected by the container runtime).
+  Every string value, including stack traces, passes through the masks below, which mirror
+  telemetry/PiiSanitizer: no email, phone, IP, URL, token or password reaches a log line even if code logs one by mistake.
+  Fields: @timestamp, level, logger_name, thread_name, message, stack_trace, app, node and MDC (e.g. sessionId).
+  For readable local logs run with the property logging.config=classpath:logback-text.xml
+-->
+<configuration>
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"app":"tripupdates","node":"${NODE_ID:-local}"}</customFields>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>12</maxDepthPerThrowable>
+                <maxLength>3000</maxLength>
+                <rootCauseFirst>true</rootCauseFirst>
+            </throwableConverter>
+            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+            <valueMask>
+                <value>\b[A-Za-z][A-Za-z0-9+.-]*://\S+</value>
+                <mask>[REDACTED_URL]</mask>
+            </valueMask>
+            <valueMask>
+                <value>eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*</value>
+                <mask>[REDACTED_TOKEN]</mask>
+            </valueMask>
+            <valueMask>
+                <value>(?i)bearer\s+[A-Za-z0-9._~+/=-]+</value>
+                <mask>[REDACTED_TOKEN]</mask>
+            </valueMask>
+            <valueMask>
+                <value>(?i)\b(?:password|passwd|pwd|secret|apikey|api-key|token|authorization)\b\s*[:=]\s*\S+</value>
+                <mask>[REDACTED_CREDENTIALS]</mask>
+            </valueMask>
+            <valueMask>
+                <value>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}</value>
+                <mask>[REDACTED_EMAIL]</mask>
+            </valueMask>
+            <valueMask>
+                <value>\b(?:\d{1,3}\.){3}\d{1,3}\b</value>
+                <mask>[REDACTED_IP]</mask>
+            </valueMask>
+            <valueMask>
+                <value>\+\d[\d\s().-]{7,}\d</value>
+                <mask>[REDACTED_PHONE]</mask>
+            </valueMask>
+            <valueMask>
+                <value>(?&lt;![\w.-])\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?![\w-])</value>
+                <mask>[REDACTED_PHONE]</mask>
+            </valueMask>
+            <valueMask>
+                <value>(?&lt;![\w.-])\d{5}[\s-]\d{5}(?![\w-])</value>
+                <mask>[REDACTED_PHONE]</mask>
+            </valueMask>
+            <valueMask>
+                <value>(?&lt;![\w.-])[6-9]\d{9}(?![\w.-])</value>
+                <mask>[REDACTED_PHONE]</mask>
+            </valueMask>
+            </jsonGeneratorDecorator>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="JSON"/>
+    </root>
+</configuration>
