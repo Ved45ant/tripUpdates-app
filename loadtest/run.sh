@@ -5,7 +5,9 @@
 #   docker compose up -d --build            # with SEED_LOAD_CABS=2000 on first start, see ../docker-compose.yml
 #   ./loadtest/run.sh                       # defaults: 10,000 connections, 2,000 cabs, 90 s, kill gateway-2 at +40 s
 #
-# Overrides (environment): CONNECTIONS DESKS CABS DURATION KILL_AT KILL_NODE SIM_HEAP NETWORK
+# Overrides (environment, set BEFORE the command): CONNECTIONS DESKS CABS DURATION KILL_AT KILL_NODE SIM_HEAP NETWORK
+#   CONNECTIONS=500 DESKS=10 CABS=150 DURATION=40 KILL_AT=15 ./loadtest/run.sh
+# NETWORK defaults to the network of the running trip-nginx container.
 set -euo pipefail
 
 CONNECTIONS="${CONNECTIONS:-10000}"
@@ -15,7 +17,9 @@ DURATION="${DURATION:-90}"
 KILL_AT="${KILL_AT:-40}"
 KILL_NODE="${KILL_NODE:-trip-gateway-2}"
 SIM_HEAP="${SIM_HEAP:-1g}"
-NETWORK="${NETWORK:-tripupdates_default}"
+# compose names the network <project dir>_default, so take it from the running nginx container instead of guessing
+NETWORK="${NETWORK:-$(docker inspect trip-nginx --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null || true)}"
+[ -n "$NETWORK" ] || { echo "trip-nginx is not running (start the stack with 'docker compose up -d') or set NETWORK=<name>" >&2; exit 1; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Git Bash on Windows needs a Windows-style path for the volume mount
